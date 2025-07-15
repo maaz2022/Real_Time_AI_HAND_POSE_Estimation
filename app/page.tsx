@@ -1,15 +1,24 @@
 "use client";
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 // import logo from './logo.svg';
 import * as tf from "@tensorflow/tfjs";
 import * as handpose from "@tensorflow-models/handpose";
 import Webcam from "react-webcam";
 import { drawHand } from "@/components/Utilities";
+import * as fp from "fingerpose";
+import victory from "@/public/victory.png";
+import thumbsUp from "@/public/thumbs_up.png";
+import Image from "next/image";
+
 
 export default function Home() {
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+  const [emoji, setEmoji] = useState<string | null>(null);
+  const images = {
+    "victory": victory,
+    "thumbs_up": thumbsUp,
+  }
   useEffect(() => {
     // Initialize TensorFlow.js backend
     const initTF = async () => {
@@ -40,6 +49,24 @@ export default function Home() {
       }
 
       const predictions = await net.estimateHands(video);
+      if(predictions.length > 0) {
+        const gesture = await new fp.GestureEstimator([
+          fp.Gestures.VictoryGesture,
+          fp.Gestures.ThumbsUpGesture,
+        ]);
+        const gestureResult = await gesture.estimate(predictions[0].landmarks, 8);
+        console.log(gestureResult);
+
+        if(gestureResult.gestures.length > 0 && gestureResult !== undefined) {
+          const confidence = gestureResult.gestures.map((g) => g.score);
+          const maxConfidence = Math.max(...confidence);
+          const gesture = gestureResult.gestures.find((g) => g.score === maxConfidence);
+          if(gesture) {
+            console.log(gesture.name);
+            setEmoji(gesture.name);
+          }
+        }
+      }
       const ctx = canvasRef.current?.getContext("2d");
       if(ctx) {
         ctx.clearRect(0, 0, videoWidth, videoHeight);
@@ -79,6 +106,20 @@ export default function Home() {
           height: 480,
         }}
       />
+      {emoji && images[emoji as keyof typeof images] && (
+        <Image
+          src={images[emoji as keyof typeof images]}
+          alt="emoji"
+          style={{
+            position: "absolute",
+            top: "10%",
+            right: "10%",
+            zIndex: 20,
+          }}
+          width={100}
+          height={100}
+        />
+      )}
     </div>
   );
 }
